@@ -1,53 +1,60 @@
 import os
 import time
 import warnings
-from google import genai
-from google.genai import types
-from scaledown import ScaleDown
+import google.generativeai as genai
+from scaledown import ScaleDownCompressor
 from dotenv import load_dotenv
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 load_dotenv()
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-sd = ScaleDown()
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+model = genai.GenerativeModel("gemini-2.0-flash")
+
+sd = ScaleDownCompressor(
+    target_model="gpt-4o",
+    rate="auto",
+    api_key=os.getenv("SCALEDOWN_API_KEY")
+)
+
 
 def words(txt):
     return len(txt.split()) if txt else 0
 
-def prune_and_answer(q, data):
+
+def get_answer(q, data):
     if not data:
         return {
             "answer": "No relevant content found.",
-            "tokens_before": 0,
-            "tokens_after": 0,
-            "reduction_percent": 0,
-            "raw_context": "",
-            "compressed_context": "",
-            "success": False,
-            "error": "No data"
+            "before": 0,
+            "after": 0,
+            "saved": 0,
+            "raw": "",
+            "compressed": "",
+            "ok": False
         }
 
-    raw = "\n\n".join(d.get("text", "") for d in data[:2])
+    raw = "\n\n".join(d.get("text", "") for d in data)
     w1 = words(raw)
 
     try:
-        full_prompt = f"Context:\n{raw}\n\nQuestion: {q}"
-        result = sd.optimize_with_pipeline(full_prompt, optimizers=["remove_filler", "compress"])
-        comp = result.get("optimized_prompt", "")
+        result = sd.compress(context=raw, prompt=q)
+        comp = result.compressed_context
         if not comp or words(comp) < 15:
             comp = "\n\n".join(d.get("text", "") for d in data[:2])
-    except:
+    except Exception as e:
+        print(f"ScaleDown error: {e}")
         comp = "\n\n".join(d.get("text", "") for d in data[:2])
 
     w2 = words(comp)
-    saved = round((1 - w2 / w1) * 100, 1) if w1 else 0.0
+    saved = round((1 - w2 / max(w1, 1)) * 100, 1)
 
     p = (
-        f"You are a 10th-grade science tutor. Base your answer ONLY on the text below. "
-        f"Keep it to 3-5 sentences. If the info isn't there, say "
-        f"'I don't have enough information in my textbooks to answer that.'\n\n"
+        f"You are a 10th grade science tutor. "
+        f"Use only the text below to answer the question. "
+        f"Keep the answer to 3 to 5 sentences. "
+        f"If the answer is not in the text say you do not have that information.\n\n"
         f"Text:\n{comp}\n\n"
         f"Question: {q}\n\nAnswer:"
     )
@@ -58,11 +65,10 @@ def prune_and_answer(q, data):
 
     for attempt in range(max_retries):
         try:
-            response = client.models.generate_content(
-                model="gemini-1.5-flash",
-                contents=p,
-                config=types.GenerateContentConfig(
-                    max_output_tokens=100,
+            response = model.generate_content(
+                p,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=250,
                     temperature=0.3
                 )
             )
@@ -80,42 +86,53 @@ def prune_and_answer(q, data):
     if error_msg:
         return {
             "answer": "Error: " + error_msg,
-            "tokens_before": w1,
-            "tokens_after": w2,
-            "reduction_percent": saved,
-            "raw_context": raw,
-            "compressed_context": comp,
-            "success": False,
-            "error": error_msg
+            "before": w1,
+            "after": w2,
+            "saved": saved,
+            "raw": raw,
+            "compressed": comp,
+            "ok": False
         }
 
     return {
         "answer": ans,
-        "tokens_before": w1,
-        "tokens_after": w2,
-        "reduction_percent": saved,
-        "raw_context": raw,
-        "compressed_context": comp,
-        "success": True,
-        "error": None
+        "before": w1,
+        "after": w2,
+        "saved": saved,
+        "raw": raw,
+        "compressed": comp,
+        "ok": True
     }
+
 
 if __name__ == "__main__":
     test_data = [
-        {"text": "Photosynthesis is the process by which green plants use sunlight to make food. It takes place in the chloroplasts. Plants take in carbon dioxide and water for this process. Chlorophyll absorbs the light energy needed.", "score": 0.9},
-        {"text": "During photosynthesis oxygen is released as a byproduct. The glucose produced is used by the plant for energy and growth.", "score": 0.75},
-        {"text": "The French Revolution started in 1789 and changed the political structure of France.", "score": 0.05},
-        {"text": "The Calvin cycle fixes carbon dioxide into organic molecules using energy from ATP.", "score": 0.65}
+        {
+            "text": "Photosynthesis is the process by which green plants use sunlight to make food. It takes place in the chloroplasts. Plants take in carbon dioxide and water for this process. Chlorophyll absorbs the light energy needed.",
+            "score": 0.9
+        },
+        {
+            "text": "During photosynthesis oxygen is released as a byproduct. The glucose produced is used by the plant for energy and growth.",
+            "score": 0.75
+        },
+        {
+            "text": "The French Revolution started in 1789 and changed the political structure of France.",
+            "score": 0.05
+        },
+        {
+            "text": "The Calvin cycle fixes carbon dioxide into organic molecules using energy from ATP.",
+            "score": 0.65
+        }
     ]
 
     q = "What is photosynthesis and where does it happen?"
-    out = prune_and_answer(q, test_data)
+    out = get_answer(q, test_data)
 
-    if not out["success"]:
-        print("Error:", out["error"])
+    if not out["ok"]:
+        print("Error:", out["answer"])
     else:
         print("Answer:", out["answer"])
-        print("Words before:", out["tokens_before"])
-        print("Words after:", out["tokens_after"])
-        print("Reduction:", out["reduction_percent"], "%")
-        print("Compressed context:", out["compressed_context"])
+        print("Words before:", out["before"])
+        print("Words after:", out["after"])
+        print("Reduction:", out["saved"], "%")
+        print("Compressed text:", out["compressed"])
