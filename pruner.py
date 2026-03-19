@@ -1,12 +1,11 @@
 import os
-import google.generativeai as genai
+from groq import Groq
 from scaledown import ScaleDown
 from dotenv import load_dotenv
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-2.0-flash")
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 sd = ScaleDown()
 
 def words(txt):
@@ -29,11 +28,8 @@ def prune_and_answer(q, data):
     w1 = words(raw)
 
     try:
-        full_prompt = f"Context:\n{raw}\n\nQuestion: {q}"
-        result = sd.optimize_with_pipeline(full_prompt, optimizers=["remove_filler", "compress"])
-        comp = result.get("optimized_prompt", "")
-        if not comp or words(comp) < 15:
-            comp = "\n\n".join(d.get("text", "") for d in data[:2])
+        filtered = sorted(data, key=lambda x: x.get("score", 0), reverse=True)
+        comp = "\n\n".join(d.get("text", "") for d in filtered[:2])
     except:
         comp = "\n\n".join(d.get("text", "") for d in data[:2])
 
@@ -49,14 +45,13 @@ def prune_and_answer(q, data):
     )
 
     try:
-        response = model.generate_content(
-            p,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=250,
-                temperature=0.3
-            )
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": p}],
+            max_tokens=250,
+            temperature=0.3
         )
-        ans = response.text
+        ans = response.choices[0].message.content
 
     except Exception as e:
         return {
@@ -80,7 +75,6 @@ def prune_and_answer(q, data):
         "success": True,
         "error": None
     }
-
 
 if __name__ == "__main__":
     test_data = [
