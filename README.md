@@ -4,7 +4,7 @@ This is our project built as part of the Intel Unnati Program. The idea is simpl
 
 ## What the project does
 
-A student types a question. The system finds the most relevant chunks of text from a science textbook, compresses that context to remove redundant information, and then passes it to a language model (Gemini 1.5 Flash) to generate an answer. The whole thing runs as a simple web app built with Streamlit.
+A student types a question. The system finds the most relevant chunks of text from a science textbook, compresses that context to remove redundant information, and then passes it to a language model (Grok Llama 3.3 70B Versatile) to generate an answer. The whole thing runs as a simple web app built with Streamlit.
 
 ## Why we built it this way
 
@@ -28,7 +28,7 @@ tutor_project/
 1. The textbook content is split into small overlapping chunks
 2. When a question comes in, TF-IDF is used to rank those chunks by relevance
 3. The top chunks are passed to the pruner, which removes redundant content
-4. The compressed context and the original question go to Gemini 1.5 Flash
+4. The compressed context and the original question go to Grok Llama 3.3 70B Versatile
 5. The answer is shown in the Streamlit app
 
 ## Tech stack
