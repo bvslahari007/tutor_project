@@ -36,8 +36,9 @@ tutor_project/
 - Python
 - scikit-learn (TF-IDF retrieval)
 - ScaleDown API (context compression)
-- Google Gemini 1.5 Flash (answer generation)
+- Google Gemini 2.0 Flash (answer generation)
 - Streamlit (frontend)
+- Groq API
 
 ## Setup
 
