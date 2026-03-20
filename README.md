@@ -36,9 +36,8 @@ tutor_project/
 - Python
 - scikit-learn (TF-IDF retrieval)
 - ScaleDown API (context compression)
-- Google Gemini 2.0 Flash (answer generation)
+- Grok Llama 3.3 70B Versatile (answer generation)
 - Streamlit (frontend)
-- Groq API
 
 ## Setup
 
@@ -54,7 +53,7 @@ Add your API keys. Create a `.env` file in the root folder:
 
 ```
 SCALEDOWN_API_KEY=your_key_here
-GEMINI_API_KEY=your_key_here
+GROK_API_KEY=your_key_here
 ```
 
 Run the app:
